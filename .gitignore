@@ -216,3 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# Project-specific: large data, models, and experiment tracking
+data/raw/
+data/processed/
+models/*.pt
+models/*.pth
+mlruns/
+*.tar.gz
