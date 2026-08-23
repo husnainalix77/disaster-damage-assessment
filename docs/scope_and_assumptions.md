@@ -8,7 +8,10 @@ Automate the interpretation step of post-disaster damage assessment: given a pre
 ## Dataset Scope
 - Source: xBD / xView2 Challenge dataset (train + test sets, SHA1-verified on download)
 - Training subset: 2 disaster types selected from the Challenge training set (not the full dataset, not the full "with metadata" GeoTIFF release, not Tier3 additional data)
-- Reason: hardware constraints (see below) make the full ~22,068-image dataset impractical to iterate on locally; a focused subset allows faster, honest iteration
+- **Selected training disasters: `hurricane-harvey` (319 pairs, flood/wind damage) + `hurricane-michael` (343 pairs, wind/structural damage)** — chosen for being visually/mechanically distinct damage types
+- **Held-out generalization disaster (Phase 7): `mexico-earthquake` (121 pairs, structural collapse)** — mechanically distinct from both training types
+- **Revision note:** `socal-fire` (823 pairs, fire damage) was the original training choice but was dropped after visual sampling (~15 images) showed buildings predominantly labeled `un-classified` rather than a specific damage class — likely a fire-damage-specific annotation characteristic (char/smoke damage is harder to visually classify than structural collapse or water damage), not a data-quality bug. `hurricane-michael` was confirmed via the same visual sampling method to show a healthy spread across all 4 target damage classes before being selected as the replacement.
+- Reason for a subset at all: hardware constraints (see below) make the full ~22,068-image dataset impractical to iterate on locally; a focused subset allows faster, honest iteration
 - A 3rd disaster type may be added later only if Phases 0-4 go faster than expected — not assumed upfront
 
 ## Hardware & Compute Scope
