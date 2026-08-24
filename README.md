@@ -105,7 +105,7 @@ Satellites already capture before/after imagery of disaster zones quickly. **The
 |---|---|---|
 | 0 | Environment, Repo Structure & Scoping Decisions | ✅ Complete |
 | 1 | Dataset Acquisition & Verification | ✅ Complete |
-| 2 | Exploratory Data Analysis | ⬜ Not Started |
+| 2 | Exploratory Data Analysis | 🔄 Ongoing |
 | 3 | Preprocessing & Augmentation Pipeline | ⬜ Not Started |
 | 4 | Building Localization / Segmentation Model | ⬜ Not Started |
 | 5 | Damage Classification (Transfer Learning) | ⬜ Not Started |
