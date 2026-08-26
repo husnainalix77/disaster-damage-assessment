@@ -4,7 +4,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python&logoColor=white)
 ![PyTorch](https://img.shields.io/badge/PyTorch-CPU--Build-EE4C2C?logo=pytorch&logoColor=white)
-![Status](https://img.shields.io/badge/Status-Phase%201%20Complete-yellow)
+![Status](https://img.shields.io/badge/Status-Phase%202%20Complete-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Dataset](https://img.shields.io/badge/Dataset-xBD%20%2F%20xView2-blueviolet)
 
@@ -19,6 +19,7 @@
 - [System Architecture](#-system-architecture)
 - [Tech Stack](#-tech-stack)
 - [Project Progress](#-project-progress)
+- [Dataset & Training Set Rationale](#-dataset--training-set-rationale)
 - [Repository Structure](#-repository-structure)
 - [Problems Faced & How They Were Solved](#-problems-faced--how-they-were-solved)
 - [Key Engineering Decisions](#-key-engineering-decisions)
@@ -37,7 +38,7 @@ Satellites already capture before/after imagery of disaster zones quickly. **The
 
 **What this project builds:** a pipeline that takes a pre-disaster and post-disaster satellite image pair, locates every building, and classifies its damage level — `No Damage → Minor → Major → Destroyed` — producing a structured, prioritizable damage report.
 
-> 📌 **Honest scope note:** this is a solo, single-laptop project (8GB RAM, no dedicated GPU) built on a 2–3 disaster-type subset of the real xBD/xView2 benchmark dataset — a proof of concept demonstrating industry-standard *method*, not industry-scale *infrastructure*. See [Key Engineering Decisions](#-key-engineering-decisions) for the full reasoning.
+> 📌 **Honest scope note:** this is a solo, single-laptop project (8GB RAM, no dedicated GPU) built on a small, deliberately chosen disaster-type subset of the real xBD/xView2 benchmark dataset — a proof of concept demonstrating industry-standard *method*, not industry-scale *infrastructure*. See [Key Engineering Decisions](#-key-engineering-decisions) for the full reasoning.
 
 ---
 
@@ -89,6 +90,7 @@ Satellites already capture before/after imagery of disaster zones quickly. **The
 | **Language** | Python 3.12 |
 | **Deep Learning** | PyTorch (CPU build), torchvision |
 | **Data Handling** | pandas, numpy, shapely |
+| **Statistical Validation** | scipy — chi-square test of independence, KS-test |
 | **Visualization** | matplotlib, seaborn |
 | **Classical ML** | scikit-learn |
 | **Deployment** | FastAPI, Docker |
@@ -105,7 +107,7 @@ Satellites already capture before/after imagery of disaster zones quickly. **The
 |---|---|---|
 | 0 | Environment, Repo Structure & Scoping Decisions | ✅ Complete |
 | 1 | Dataset Acquisition & Verification | ✅ Complete |
-| 2 | Exploratory Data Analysis | 🔄 Ongoing |
+| 2 | Exploratory Data Analysis | ✅ Complete |
 | 3 | Preprocessing & Augmentation Pipeline | ⬜ Not Started |
 | 4 | Building Localization / Segmentation Model | ⬜ Not Started |
 | 5 | Damage Classification (Transfer Learning) | ⬜ Not Started |
@@ -119,22 +121,45 @@ Satellites already capture before/after imagery of disaster zones quickly. **The
 
 ### ✅ Phase 0 — Environment, Repo Structure & Scoping Decisions
 - Repo created (`disaster-damage-assessment`), structured into `data/`, `docs/`, `models/`, `notebooks/`, `src/`, `app/`
-- Python virtual environment (`venv`) created and activated
-- PyTorch **2.13.0+cpu** installed and verified (`torch.cuda.is_available()` correctly returns `False`, confirming the CPU build matches the hardware)
-- Full stack installed: pandas, numpy, matplotlib, seaborn, scikit-learn, jupyter, fastapi, uvicorn, mlflow — frozen into `requirements.txt`
-- `docs/scope_and_assumptions.md` written upfront, documenting the dataset subset decision, hardware constraints, methodology choices, and known generalization limitations *before* any modeling began
-- xBD Challenge training set (7.8 GB) and test set (2.6 GB) downloaded and **SHA1-verified** against official checksums
-- `.gitignore` extended beyond the default Python template to exclude `data/raw/`, `data/processed/`, model weight files, and MLflow tracking logs — keeping large/non-redistributable files out of version control
+- Python virtual environment created; PyTorch **2.13.0+cpu** installed and verified as the correct CPU build for this hardware
+- Full stack installed and frozen into `requirements.txt`; `docs/scope_and_assumptions.md` written upfront, documenting hardware constraints and methodology choices before any modeling began
+- xBD Challenge training set (7.8 GB) and test set (2.6 GB) downloaded and **SHA1-verified**
+- `.gitignore` extended to exclude large/non-redistributable data and model files
 
 ### ✅ Phase 1 — Dataset Acquisition & Verification
-- Confirmed folder structure in both `data/raw/train` and `data/raw/test`: `images/` (pre/post PNG pairs), `labels/` (JSON polygon + damage annotations), `targets/` (rasterized damage mask PNGs)
-- Built a reusable `DisasterInspector` verification utility (`src/verify_dataset.py`) that scans filenames, extracts disaster type, and cross-checks counts across all three folders
-- Confirmed **2,799 pre/post image pairs** across 10 disaster types in the training set, with full images/labels/targets parity (no mismatches) in both the training and test splits
-- **Selected training disasters: `hurricane-harvey`** (319 pairs, flood/wind damage) **+ `hurricane-michael`** (343 pairs, wind/structural damage) — chosen for being visually and mechanically distinct damage types
-- **Selected held-out generalization disaster (for Phase 7): `mexico-earthquake`** (121 pairs, structural collapse) — mechanically distinct from both training types, making it a genuine generalization test rather than a soft one
-- Performed **visual label-overlay verification**: parsed WKT building polygons (via `shapely`) from label JSONs and plotted them directly on matching post-disaster imagery, color-coded by damage class — confirmed polygons are correctly aligned to real building shapes across all selected disaster types
-- **Disaster selection was revised mid-phase**: `socal-fire` was the original training choice but was dropped after visual sampling of ~15 images showed buildings predominantly labeled `un-classified` rather than a specific damage class — likely a fire-damage-specific annotation characteristic. `hurricane-michael` was verified via the same method to show a healthy spread across all 4 target damage classes and selected as the replacement
-- Full findings and revision history documented in `docs/phase1_dataset_verification.md`
+- Confirmed folder structure (`images/`, `labels/`, `targets/`) and full parity across all three, in both train and test splits, across 10 disaster types (2,799 total training pairs, zero mismatches)
+- Built a reusable verification utility (`src/verify_dataset.py`)
+- Performed visual label-overlay verification confirming polygon labels are correctly aligned to real buildings
+- Full findings in `docs/phase1_dataset_verification.md`
+
+### ✅ Phase 2 — Exploratory Data Analysis
+Moved the project's training-disaster selection from a plausible starting guess to a fully evidence-backed decision, and characterized the resulting dataset ahead of preprocessing. See [Dataset & Training Set Rationale](#-dataset--training-set-rationale) below for the full breakdown, and `docs/phase2_eda_summary.md` for complete findings.
+
+**Highlights:**
+- Full-count damage-class analysis across all 10 disaster types identified a critical `destroyed`-class gap in the original 2-disaster set and resolved it with a statistically justified 3rd training disaster
+- Building size, image resolution, and building density were all characterized across the final training set, directly informing Phase 3's preprocessing strategy
+- Two statistical techniques (chi-square test, KS-test) were applied to validate observed patterns rather than relying on visual inspection alone — the same techniques used in the [transaction-fraud-risk-engine](https://github.com/husnainalix77/transaction-fraud-risk-engine) project, now reused in a second, different domain
+
+---
+
+## 🗂️ Dataset & Training Set Rationale
+
+**Final training set:** `hurricane-harvey` (319 pairs) + `hurricane-michael` (343 pairs) + `santa-rosa-wildfire` (226 pairs)
+**Held-out generalization disaster (Phase 7):** `mexico-earthquake` (121 pairs)
+
+| Step | Finding |
+|---|---|
+| Initial 2-disaster set (`harvey` + `michael`) | Only 2.5% combined `destroyed`-class representation — a critical gap for a disaster-response tool |
+| Full 10-disaster count analysis | 4 candidates identified by `destroyed`%: `santa-rosa-wildfire` (26.8%), `palu-tsunami` (15.8%), `hurricane-matthew` (15.4%), `socal-fire` (12.7%) |
+| `hurricane-matthew` — excluded | Duplicates the existing hurricane wind/flood damage mechanism; adds volume, not diversity |
+| `palu-tsunami` — excluded | Real-world combined earthquake+tsunami event; would blur the "unseen mechanism" boundary against the `mexico-earthquake` held-out disaster |
+| `socal-fire` — re-evaluated, not selected | Full-count `un-classified` rate is only 3.6% (an earlier small visual sample overstated this); still a weaker `destroyed`-class benefit than `santa-rosa-wildfire` |
+| `santa-rosa-wildfire` — **selected** | 26.8% `destroyed` (highest by a wide margin), mechanically distinct (fire vs. wind/flood), doesn't compromise the held-out test |
+| Statistical confirmation | Chi-square test confirms damage-class distributions differ significantly across the 3 training disasters (χ² = 19218.04, p < 0.0001) |
+| Building size, by disaster | Consistent across all 3 disasters (median ~900–1,200 sq px) — no conflicting scale introduced |
+| Building size, by damage class | Consistent across damage classes, except `un-classified` buildings, which are significantly smaller (KS statistic = 0.3916, p < 0.0001) — a plausible explanation for elevated `un-classified` rates in fire disasters |
+| Image resolution | Uniformly 1024×1024 across all training data, pre and post |
+| Building density per image | Right-skewed across all 3 disasters (mean 57–72 buildings/image); `hurricane-michael` shows a distinct, more evenly-spread pattern |
 
 ---
 
@@ -148,10 +173,12 @@ disaster-damage-assessment/
 │   └── processed/                # Preprocessed data (gitignored)
 ├── docs/
 │   ├── scope_and_assumptions.md      # Honest project scope, written in Phase 0
-│   └── phase1_dataset_verification.md # Phase 1 findings and disaster selection reasoning
+│   ├── phase1_dataset_verification.md # Phase 1 findings and disaster selection reasoning
+│   └── phase2_eda_summary.md         # Phase 2 EDA findings and statistical validation
 ├── models/                       # Trained model weights (gitignored)
 ├── notebooks/
-│   └── 01_dataset_verification.ipynb # Phase 1 verification + visual label-overlay checks
+│   ├── 01_dataset_verification.ipynb # Phase 1 verification + visual label-overlay checks
+│   └── 02_eda.ipynb                  # Phase 2 EDA — full analysis, sections 2.1-2.8
 ├── src/
 │   └── verify_dataset.py         # Reusable dataset count/parity verification utility
 ├── .gitignore
@@ -165,44 +192,44 @@ disaster-damage-assessment/
 ## 🐛 Problems Faced & How They Were Solved
 
 **1. Windows path-length limit broke the PyTorch install.**
-PyTorch's package includes deeply nested internal files (e.g. `torch/.../third_party/kineto/.../duktape-1.5.2`), which combined with the project's folder path exceeded Windows' default 260-character path limit, causing `WinError 206` mid-install and leaving a corrupted, partial installation (`ModuleNotFoundError: No module named 'torchgen'`). **Fixed** by enabling Windows long-path support via a registry change (`LongPathsEnabled`), enabling `git config --system core.longpaths true`, restarting, then reinstalling cleanly — verified afterward with `torch.__version__` and `torch.cuda.is_available()`.
+PyTorch's deeply nested internal files, combined with the project's folder path, exceeded Windows' 260-character path limit, causing a corrupted install. **Fixed** by enabling Windows long-path support and Git's long-path config, then reinstalling cleanly.
 
 **2. `.gitignore` didn't cover project-specific large files.**
-GitHub's default Python `.gitignore` template covers standard Python artifacts (`__pycache__/`, `.pyc`, etc.) but knows nothing about this project's large data/model files. **Fixed** by manually extending `.gitignore` with `data/raw/`, `data/processed/`, `models/*.pt`, `mlruns/`, and `*.tar.gz` before any large files could be accidentally committed.
+GitHub's default Python template doesn't account for large data/model files. **Fixed** by manually extending it to exclude `data/raw/`, `data/processed/`, model weight files, and MLflow logs.
 
 **3. SHA1 verification via `shasum` doesn't exist natively on Windows.**
-The xView2 download page's verification instructions assume a Unix-like `shasum` command, unavailable by default in Windows PowerShell. **Fixed** by using PowerShell's built-in `Get-FileHash -Algorithm SHA1` instead — confirmed both training and test archive hashes matched the official checksums exactly.
+**Fixed** using PowerShell's built-in `Get-FileHash -Algorithm SHA1`.
 
 **4. A silent validation bug in the dataset-structure checker.**
-An early version of `_validate_structure()` had a `return True` statement indented inside the folder-existence loop instead of after it — meaning the function returned success after checking only the *first* folder, never actually verifying the other two. It went unnoticed initially because all folders genuinely existed. **Fixed** by correcting the indentation so all three folders are checked before returning success.
+`_validate_structure()` returned success after checking only the first folder due to an indentation error. **Fixed** by correcting the loop structure so all folders are genuinely checked.
 
-**5. Initial disaster type selection (`socal-fire`) turned out to be a poor training choice.**
-Counts and label/target parity for `socal-fire` all checked out cleanly — the problem only surfaced during visual label-overlay verification, where ~15 sampled images showed buildings predominantly labeled `un-classified` rather than a specific damage class. Numeric verification alone would not have caught this. **Fixed** by visually re-evaluating alternative disaster types the same way and confirming `hurricane-michael` shows a healthy spread across all 4 target damage classes before selecting it as the replacement — a reminder that "the counts match" is necessary but not sufficient verification for a dataset intended to teach a model real damage patterns.
+**5. A small visual sample overstated `socal-fire`'s data quality issue.**
+An ~15-image visual check suggested `socal-fire` was predominantly `un-classified`; Phase 2's full-count analysis (10,475 buildings) showed the true rate was only 3.6%. **Lesson applied:** visual samples flag possible issues, but final decisions rest on full counts — which is why Phase 2 checked all 10 disaster types rather than stopping at the initial candidates.
 
 ---
 
 ## 🎯 Key Engineering Decisions
 
 **Q: Why not use the full xBD dataset?**
-A: The full dataset (22,068 images, 850,736 building annotations) is impractical to train on an 8GB RAM, GPU-less laptop within a reasonable iteration loop. A focused 2–3 disaster-type subset allows honest, fast iteration — more data would mainly buy marginal accuracy, not new understanding, which isn't this project's goal.
+A: The full dataset (22,068 images, 850,736 annotations) is impractical on an 8GB RAM, GPU-less laptop within a reasonable iteration loop. A focused subset allows honest, fast iteration.
 
 **Q: Why train on Colab/Kaggle for some phases instead of fully locally?**
-A: The laptop has integrated graphics only — no dedicated GPU — making CNN training (especially segmentation) dramatically slower on CPU. Phases 0–3 (setup, verification, EDA, preprocessing) run locally; Phases 4–5 (the actual model training) use free-tier cloud GPU, with trained weights brought back locally afterward.
+A: Integrated graphics only, no dedicated GPU — CNN training is dramatically slower on CPU. Phases 0-3 run locally; Phases 4-5 use free-tier cloud GPU.
+
+**Q: Why 3 training disasters instead of 2? Why these specific ones?**
+A: See [Dataset & Training Set Rationale](#-dataset--training-set-rationale) above for the full, evidence-based breakdown.
 
 **Q: Why U-Net for segmentation instead of a more complex architecture?**
-A: U-Net offers a better learning curve for a first segmentation project and is well-documented, appropriate given this is the author's first deep learning project. This is a default choice, open to revision after hands-on experience in earlier phases.
-
-**Q: Why hurricane-harvey + hurricane-michael for training, and mexico-earthquake for the held-out test?**
-A: Training disasters were chosen to be visually and mechanically distinct from each other (flood/wind vs. wind/structural), so the model learns genuinely different damage patterns rather than near-duplicate ones. `socal-fire` was the original choice for its larger pair count and distinct damage mechanism (fire), but was replaced after visual verification showed most of its buildings were labeled `un-classified` rather than a usable damage class — a real data-quality finding, not an assumption. The held-out disaster was deliberately chosen to be mechanically distinct from *both* training types (earthquake structural collapse vs. flood/wind), making the Phase 7 generalization test genuinely meaningful rather than artificially easy.
+A: Better learning curve for a first segmentation project — a default choice, open to revision after hands-on experience in earlier phases.
 
 **Q: Why MIT license, and why isn't the dataset included in the repo?**
-A: MIT license covers the project's own code, consistent with prior portfolio projects. The xBD dataset has its own usage terms set by CMU SEI/DIU, separate from this repo's license — dataset files are excluded from version control (`.gitignore`) and credited via link in this README instead.
+A: MIT covers the project's own code. xBD has its own usage terms set by CMU SEI/DIU — dataset files are excluded from version control and credited via link instead.
 
 ---
 
 ## ▶️ How to Run
 
-> Phases 0-1 (environment setup + dataset verification) are complete — full inference/demo instructions will be added as later phases are finished.
+> Phases 0-2 are complete — full inference/demo instructions will be added as later phases are finished.
 
 ```bash
 # Clone the repository
