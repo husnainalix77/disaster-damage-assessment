@@ -4,7 +4,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python&logoColor=white)
 ![PyTorch](https://img.shields.io/badge/PyTorch-CPU--Build-EE4C2C?logo=pytorch&logoColor=white)
-![Status](https://img.shields.io/badge/Status-Phase%203%20Complete-brightgreen)
+![Status](https://img.shields.io/badge/Status-Phase%204%20In%20Progress-yellow)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Dataset](https://img.shields.io/badge/Dataset-xBD%20%2F%20xView2-blueviolet)
 
@@ -109,7 +109,7 @@ Satellites already capture before/after imagery of disaster zones quickly. **The
 | 1 | Dataset Acquisition & Verification | ✅ Complete |
 | 2 | Exploratory Data Analysis | ✅ Complete |
 | 3 | Preprocessing & Augmentation Pipeline | ✅ Complete |
-| 4 | Building Localization / Segmentation Model | ⬜ Not Started |
+| 4 | Building Localization / Segmentation Model | 🔄 In Progress |
 | 5 | Damage Classification (Transfer Learning) | ⬜ Not Started |
 | 6 | Evaluation — Segmentation & Classification Metrics | ⬜ Not Started |
 | 7 | Held-Out Disaster-Type Generalization Test | ⬜ Not Started |
@@ -129,15 +129,21 @@ Folder structure, count parity (2,799 pairs, 10 disaster types, zero mismatches)
 Full-count, evidence-based training-disaster selection; building size, resolution, and density characterization; two statistical validation techniques (chi-square, KS-test) applied and correctly interpreted. See [Dataset & Training Set Rationale](#-dataset--training-set-rationale) and `docs/phase2_eda_summary.md`.
 
 ### ✅ Phase 3 — Preprocessing & Augmentation Pipeline
-Built the complete data pipeline feeding Phase 4's model training. Full findings in `docs/phase3_preprocessing_summary.md`.
+80/20 train/validation split by location ID (710 training locations); `un-classified` labels excluded from classifier training (0.98% of data, not a genuine damage class); `SegmentationDataset` PyTorch class built and verified, supplying resized (512×512) pre-disaster image + binary building-mask pairs with training-only augmentation. Full details in `docs/phase3_preprocessing_summary.md`.
 
-- **3.1** — Split 710 training / 178 validation locations by unique location ID (not by file), preserving every location's full file bundle together
-- **3.2** — Decided to exclude `un-classified` labels from classifier training (0.98% of data, not a genuine damage class)
-- **3.3** — Built `SegmentationDataset` (`src/segmentation_dataset.py`), a PyTorch `Dataset` class using pre-disaster images + binary building masks, with paths anchored to the file's own location for reliable reuse from any future caller (notebook, script, or FastAPI app)
-- **3.4** — Resized images/targets from 1024×1024 to 512×512, justified using Phase 2's own building-size findings (not a default choice); used different interpolation methods for image (Lanczos) vs. target (nearest-neighbor) to preserve the mask's binary values
-- **3.5** — Implemented an augmentation pipeline (flips, rotation, brightness/contrast jitter) for training data only, with geometric transforms applied identically to image and target to preserve alignment — verified both by variation testing and direct visual inspection
-- **3.6** — Investigated whether building density variation (Section 2.7) required pipeline changes; confirmed resize/augmentation are density-agnostic, deferred a related open question (small-building merging in dense images) to Phase 4/6 evaluation rather than solving it speculatively
-- **3.7** — Final visual verification of the complete combined pipeline across 5 varied examples, confirming correct alignment and no artifacts before proceeding to Phase 4
+### 🔄 Phase 4 — Building Localization / Segmentation Model (in progress)
+
+**4.1 — CNN & segmentation fundamentals (concept only).** Documented the conceptual foundation before writing any model code: convolution (learned, reusable pattern-detectors), pooling (spatial compression preserving strong signals), the encoder (compression toward understanding, losing spatial precision) and decoder (reconstructing a full-size output), and U-Net's defining feature — skip connections passing detail-rich encoder feature maps directly to matching decoder stages, preventing the blurry output a decoder-only approach would produce.
+
+**4.2 — U-Net architecture built and verified in PyTorch.** Built incrementally, one component at a time, each verified against hand-calculated expected shapes on a dummy input before moving to the next:
+- `EncoderBlock` — conv→relu→conv→relu→save skip→pool
+- `Bottleneck` — the deepest point of the U, same conv pattern, no pooling/skip
+- `DecoderBlock` — upsample→concatenate with matching skip→conv→relu→conv→relu
+- `UNet` — assembles 3 encoder blocks, 1 bottleneck, 3 decoder blocks, and a final 1×1 output convolution into one complete model, parameterized by `base_channels` (default 64) to allow a lighter comparison variant in Phase 4.5 without duplicating the class
+
+Verified end-to-end: a 512×512×3 input correctly produces a 512×512×1 output (per-pixel building prediction), with every intermediate shape matching manual calculation exactly. Code lives in `src/unet.py`, reusable across Phases 5, 6, 8, and 10.
+
+**Remaining:** 4.3 (loss function, optimizer, training loop), 4.4 (Colab/Kaggle GPU training), 4.5 (multi-architecture comparison), 4.6-4.9 (monitoring, model selection, saving, visual verification).
 
 ---
 
@@ -154,9 +160,9 @@ Built the complete data pipeline feeding Phase 4's model training. Full findings
 | `socal-fire` | Re-evaluated with full counts (3.6% un-classified, not the majority a small sample suggested); still not selected |
 | Statistical confirmation | Chi-square test confirms damage-class distributions differ significantly across the 3 training disasters (χ² = 19218.04, p < 0.0001) |
 | Building size, by disaster & by damage class | Consistent across disasters and classes, except `un-classified` buildings (significantly smaller, KS statistic = 0.3916) |
-| Image resolution | Uniformly 1024×1024 across all training data, pre and post — resized to 512×512 for training (Phase 3.4) |
+| Image resolution | Uniformly 1024×1024 across all training data, pre and post |
 | Building density per image | Right-skewed across all 3 disasters; `hurricane-michael` shows a distinct, more evenly-spread pattern |
-| `un-classified` labels | 0.98% of combined training set — excluded from classifier training (Phase 3.2) |
+| `un-classified` labels | 0.98% of combined training set — excluded from classifier training |
 
 ---
 
@@ -172,15 +178,18 @@ disaster-damage-assessment/
 │   ├── scope_and_assumptions.md      # Honest project scope, written in Phase 0
 │   ├── phase1_dataset_verification.md # Phase 1 findings and disaster selection reasoning
 │   ├── phase2_eda_summary.md         # Phase 2 EDA findings and statistical validation
-│   └── phase3_preprocessing_summary.md # Phase 3 preprocessing pipeline and decisions
+│   ├── phase3_preprocessing_summary.md # Phase 3 preprocessing decisions
+│   └── phase4_segmentation_summary.md # Phase 4 model architecture and training (in progress)
 ├── models/                       # Trained model weights (gitignored)
 ├── notebooks/
 │   ├── 01_dataset_verification.ipynb # Phase 1 verification + visual label-overlay checks
 │   ├── 02_eda.ipynb                  # Phase 2 EDA — full analysis, sections 2.1-2.8
-│   └── 03_preprocessing.ipynb        # Phase 3 preprocessing pipeline, sections 3.1-3.7
+│   ├── 03_preprocessing.ipynb        # Phase 3 preprocessing pipeline
+│   └── 04_segmentation.ipynb         # Phase 4 U-Net segmentation model (in progress)
 ├── src/
 │   ├── verify_dataset.py         # Reusable dataset count/parity verification utility
-│   └── segmentation_dataset.py   # PyTorch Dataset class — resize, augmentation, for Phase 4
+│   ├── segmentation_dataset.py   # PyTorch Dataset class for segmentation
+│   └── unet.py                   # U-Net architecture (EncoderBlock, Bottleneck, DecoderBlock, UNet)
 ├── .gitignore
 ├── LICENSE                       # MIT (project code only — not the dataset)
 ├── README.md
@@ -209,8 +218,8 @@ An ~15-image visual check suggested `socal-fire` was predominantly `un-classifie
 **6. `ModuleNotFoundError` importing from `src/` into a notebook.**
 Fixed by explicitly appending the project root to `sys.path` at the top of the notebook before importing.
 
-**7. Relative paths inside `src/segmentation_dataset.py` were fragile.**
-Fixed by anchoring paths to the file's own location (`Path(__file__).resolve().parent.parent`) instead of the caller's working directory, so the class works correctly regardless of whether it's called from a notebook (`notebooks/`), a future script, or a future FastAPI app (`app/`) — each of which has a different working directory.
+**7. Relative paths inside `src/` files were fragile.**
+Paths relative to the caller's working directory would break if imported from a different location later (e.g. a future FastAPI app). Fixed by anchoring paths to each file's own location (`Path(__file__).resolve().parent.parent`), which resolves correctly regardless of where the code is called from — this matters concretely, since `streamlit run app/app.py` sets the working directory to the project root, not `app/`, which would break a naive `../` path.
 
 ---
 
@@ -229,19 +238,19 @@ A: See [Dataset & Training Set Rationale](#-dataset--training-set-rationale) abo
 A: Each location's 6 related files (pre/post images, labels, targets) must stay together in the same train/validation split — splitting independently risks breaking the pairing a model depends on.
 
 **Q: Why exclude `un-classified` labels rather than treating them as a 5th class?**
-A: Not a genuine damage severity level — an annotator's uncertainty marker, confirmed smaller/more ambiguous in Phase 2.5-2.6. Under 1% of the training set, so exclusion costs negligible signal.
+A: `un-classified` isn't a genuine damage severity level — it's an annotator's uncertainty marker (confirmed smaller/more ambiguous in Phase 2.5-2.6). Treating it as a predictable class would expand the project into a different problem (uncertainty detection) for negligible lost signal (under 1% of data).
 
-**Q: Why separate `Dataset` classes for segmentation and classification?**
-A: The two tasks need structurally different data — segmentation needs a full image + binary building mask (verified to contain no damage information at all), while classification needs individual building crops + damage labels.
+**Q: Why resize to 512×512 rather than training at full 1024×1024 resolution?**
+A: A quarter of the pixel count at 512×512 gives a real, necessary speed/memory improvement on CPU-only hardware, while still preserving enough detail for the median building size (~30-35px at full resolution, ~15-17px at 512×512) to remain clearly learnable — unlike a more aggressive downsize (e.g. 256×256), which would shrink the smallest buildings to just a few pixels.
 
-**Q: Why pre-disaster images for segmentation, not post-disaster or a pre/post pair?**
-A: Segmentation's only job is locating buildings, which doesn't require damage information. Pre-disaster buildings are clean and intact, giving the clearest possible training signal — post-disaster imagery (collapse, debris, smoke) would introduce unnecessary noise. The pre/post *comparison* that assesses damage happens later, in Phase 5, on individually-cropped buildings whose locations came from this segmentation model.
+**Q: Why does the segmentation model use pre-disaster images only, not post-disaster or a pre/post pair?**
+A: Segmentation's only job is locating buildings — pre-disaster images show buildings intact and cleanly shaped, giving the clearest possible training signal. Post-disaster imagery can show partial collapse, debris, or obstruction, which would introduce noise into a task that doesn't need damage information at all. The pre/post *comparison* is deliberately deferred to Phase 5, which uses this model's building locations to guide damage classification on cropped regions from both images.
 
-**Q: Why resize to 512×512, and why two different interpolation methods?**
-A: Justified using Phase 2's building-size findings (not a default choice) — 512×512 balances CPU/memory feasibility against preserving enough detail for the smallest buildings. Lanczos interpolation is used for the image (smooth resampling suits photos); nearest-neighbor is used for the target mask, since smooth resampling would introduce invalid fractional pixel values into what must remain a strictly binary (0/1) mask.
+**Q: Why separate `Dataset` classes for segmentation and classification, rather than one combined class?**
+A: The two tasks need structurally different data — segmentation needs a full image + binary building mask (confirmed to contain no damage information at all), while classification needs individual building crops + damage labels.
 
-**Q: Why U-Net for segmentation instead of a more complex architecture?**
-A: Better learning curve for a first segmentation project — a default choice, open to revision after hands-on experience in earlier phases.
+**Q: Why is the U-Net architecture parameterized by `base_channels` instead of hardcoded?**
+A: Enables creating a lighter comparison variant (e.g. `base_channels=32`) for Phase 4.5's planned multi-architecture comparison, by reusing the same class rather than duplicating it with different hardcoded values — reducing the risk of an inconsistency between two separately-maintained versions.
 
 **Q: Why MIT license, and why isn't the dataset included in the repo?**
 A: MIT covers the project's own code. xBD has its own usage terms set by CMU SEI/DIU — dataset files are excluded from version control and credited via link instead.
@@ -250,7 +259,7 @@ A: MIT covers the project's own code. xBD has its own usage terms set by CMU SEI
 
 ## ▶️ How to Run
 
-> Phases 0-3 are complete — full inference/demo instructions will be added as later phases are finished.
+> Phases 0-3 are complete and Phase 4 is in progress — full inference/demo instructions will be added as later phases are finished.
 
 ```bash
 # Clone the repository
