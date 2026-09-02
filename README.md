@@ -88,7 +88,7 @@ Satellites already capture before/after imagery of disaster zones quickly. **The
 | Category | Tools |
 |---|---|
 | **Language** | Python 3.12 |
-| **Deep Learning** | PyTorch (CPU build), torchvision |
+| **Deep Learning** | PyTorch (CPU build locally; GPU via Colab/Kaggle for training), torchvision |
 | **Data Handling** | pandas, numpy, shapely |
 | **Statistical Validation** | scipy — chi-square test of independence, KS-test |
 | **Visualization** | matplotlib, seaborn |
@@ -97,7 +97,7 @@ Satellites already capture before/after imagery of disaster zones quickly. **The
 | **Experiment Tracking** | MLflow |
 | **Demo/UI** | Streamlit |
 | **Dataset** | [xBD / xView2](https://xview2.org/dataset) — CMU SEI & U.S. Defense Innovation Unit |
-| **Compute** | Local (Dell Latitude 5590, i5, 8GB RAM, CPU-only) + free-tier Google Colab / Kaggle GPU for training phases |
+| **Compute** | Local (Dell Latitude 5590, i5, 8GB RAM, CPU-only) for development/verification + free-tier Google Colab / Kaggle GPU for actual training runs |
 
 ---
 
@@ -129,21 +129,21 @@ Folder structure, count parity (2,799 pairs, 10 disaster types, zero mismatches)
 Full-count, evidence-based training-disaster selection; building size, resolution, and density characterization; two statistical validation techniques (chi-square, KS-test) applied and correctly interpreted. See [Dataset & Training Set Rationale](#-dataset--training-set-rationale) and `docs/phase2_eda_summary.md`.
 
 ### ✅ Phase 3 — Preprocessing & Augmentation Pipeline
-80/20 train/validation split by location ID (710 training locations); `un-classified` labels excluded from classifier training (0.98% of data, not a genuine damage class); `SegmentationDataset` PyTorch class built and verified, supplying resized (512×512) pre-disaster image + binary building-mask pairs with training-only augmentation. Full details in `docs/phase3_preprocessing_summary.md`.
+80/20 train/validation split by location ID (710 training locations), saved to disk (`train_ids.txt`/`val_ids.txt`) for reuse across all later phases; `un-classified` labels excluded from classifier training (0.98% of data); `SegmentationDataset` PyTorch class built and verified, supplying resized (512×512) pre-disaster image + binary building-mask pairs with training-only augmentation. Full details in `docs/phase3_preprocessing_summary.md`.
 
 ### 🔄 Phase 4 — Building Localization / Segmentation Model (in progress)
 
-**4.1 — CNN & segmentation fundamentals (concept only).** Documented the conceptual foundation before writing any model code: convolution (learned, reusable pattern-detectors), pooling (spatial compression preserving strong signals), the encoder (compression toward understanding, losing spatial precision) and decoder (reconstructing a full-size output), and U-Net's defining feature — skip connections passing detail-rich encoder feature maps directly to matching decoder stages, preventing the blurry output a decoder-only approach would produce.
+**4.1 — CNN & segmentation fundamentals (concept only).** Convolution (learned, reusable pattern-detectors), pooling (spatial compression preserving strong signals), encoder-decoder structure, and U-Net's defining feature — skip connections passing detail-rich encoder feature maps directly to matching decoder stages.
 
-**4.2 — U-Net architecture built and verified in PyTorch.** Built incrementally, one component at a time, each verified against hand-calculated expected shapes on a dummy input before moving to the next:
-- `EncoderBlock` — conv→relu→conv→relu→save skip→pool
-- `Bottleneck` — the deepest point of the U, same conv pattern, no pooling/skip
-- `DecoderBlock` — upsample→concatenate with matching skip→conv→relu→conv→relu
-- `UNet` — assembles 3 encoder blocks, 1 bottleneck, 3 decoder blocks, and a final 1×1 output convolution into one complete model, parameterized by `base_channels` (default 64) to allow a lighter comparison variant in Phase 4.5 without duplicating the class
+**4.2 — U-Net architecture built and verified in PyTorch (`src/unet.py`).** Built incrementally — `EncoderBlock`, `Bottleneck`, `DecoderBlock`, assembled into `UNet` — each verified against hand-calculated expected shapes on a dummy input before proceeding. Parameterized by `base_channels` (default 64) to support a lighter comparison variant in Phase 4.5 without duplicating the class. Verified end-to-end: 512×512×3 input correctly produces 512×512×1 output.
 
-Verified end-to-end: a 512×512×3 input correctly produces a 512×512×1 output (per-pixel building prediction), with every intermediate shape matching manual calculation exactly. Code lives in `src/unet.py`, reusable across Phases 5, 6, 8, and 10.
+**4.3 — Loss function, optimizer, and training loop.** `BCEWithLogitsLoss` (matches the model's raw-logit output and the binary per-pixel target) and `Adam` (lr=1e-4) set up; training loop built (zero gradients → forward pass → compute loss → backpropagate → optimizer step) and validated on live data.
 
-**Remaining:** 4.3 (loss function, optimizer, training loop), 4.4 (Colab/Kaggle GPU training), 4.5 (multi-architecture comparison), 4.6-4.9 (monitoring, model selection, saving, visual verification).
+- **Bug found and fixed:** `SegmentationDataset.__getitem__` was returning PIL Image objects rather than tensors — unnoticed in Phase 3.3's single-item testing, since `DataLoader`'s batching only breaks when combining *multiple* examples. Fixed by adding `torchvision.transforms.ToTensor()` conversion after resizing/augmentation.
+- **Verified healthy starting behavior:** first-batch loss (0.7508) close to the theoretical random-guessing baseline for BCE (≈0.693) — confirming the pipeline is correctly wired, not just error-free.
+- **Critical hardware finding:** measured ~2 minutes per batch on local CPU, projecting ~3 hours per epoch and ~90 hours for a full ~30-epoch training run — confirming the Phase 0 scope decision that real training must move to free-tier GPU (Colab/Kaggle), with local CPU reserved for pipeline development and verification only.
+
+**Remaining:** 4.4 (Colab/Kaggle GPU training setup and execution), 4.5 (multi-architecture comparison), 4.6-4.9 (monitoring, model selection, saving, visual verification).
 
 ---
 
@@ -173,7 +173,7 @@ disaster-damage-assessment/
 ├── app/                          # FastAPI + Streamlit application code (Phase 10-11)
 ├── data/
 │   ├── raw/                      # Downloaded xBD imagery (gitignored)
-│   └── processed/                # Preprocessed data (gitignored)
+│   └── processed/                # train_ids.txt / val_ids.txt (gitignored)
 ├── docs/
 │   ├── scope_and_assumptions.md      # Honest project scope, written in Phase 0
 │   ├── phase1_dataset_verification.md # Phase 1 findings and disaster selection reasoning
@@ -219,7 +219,13 @@ An ~15-image visual check suggested `socal-fire` was predominantly `un-classifie
 Fixed by explicitly appending the project root to `sys.path` at the top of the notebook before importing.
 
 **7. Relative paths inside `src/` files were fragile.**
-Paths relative to the caller's working directory would break if imported from a different location later (e.g. a future FastAPI app). Fixed by anchoring paths to each file's own location (`Path(__file__).resolve().parent.parent`), which resolves correctly regardless of where the code is called from — this matters concretely, since `streamlit run app/app.py` sets the working directory to the project root, not `app/`, which would break a naive `../` path.
+Fixed by anchoring paths to each file's own location (`Path(__file__).resolve().parent.parent`), which resolves correctly regardless of where the code is called from — e.g. `streamlit run app/app.py` sets the working directory to the project root, not `app/`, which would break a naive `../` path.
+
+**8. `DataLoader` couldn't batch `SegmentationDataset`'s output.**
+`__getitem__` returned raw PIL Image objects, which `DataLoader`'s batching logic can't stack into tensors. Unnoticed during Phase 3.3's single-item testing, since batching only occurs when combining *multiple* examples. Fixed by adding `torchvision.transforms.ToTensor()` conversion as the final step in `__getitem__`.
+
+**9. Local CPU training speed made real experimentation infeasible.**
+A live-timed test showed ~2 minutes per batch, projecting ~3 hours per epoch (~90 hours for a full training run). Rather than attempting to push through locally, training was stopped after confirming the pipeline works correctly end-to-end, and moved to free-tier Colab/Kaggle GPU — the exact contingency planned for in `docs/scope_and_assumptions.md`.
 
 ---
 
@@ -229,28 +235,28 @@ Paths relative to the caller's working directory would break if imported from a 
 A: Impractical on an 8GB RAM, GPU-less laptop within a reasonable iteration loop. A focused subset allows honest, fast iteration.
 
 **Q: Why train on Colab/Kaggle for some phases instead of fully locally?**
-A: No dedicated GPU — CNN training is dramatically slower on CPU. Phases 0-3 run locally; Phases 4-5 use free-tier cloud GPU.
+A: Confirmed with a live measurement (~2 min/batch locally) — a full epoch would take ~3 hours on CPU. Phases 0-3 and pipeline verification run locally; actual training runs (Phase 4.4 onward) use free-tier cloud GPU.
 
 **Q: Why 3 training disasters instead of 2? Why these specific ones?**
 A: See [Dataset & Training Set Rationale](#-dataset--training-set-rationale) above.
 
-**Q: Why split by location ID instead of splitting each file type independently?**
-A: Each location's 6 related files (pre/post images, labels, targets) must stay together in the same train/validation split — splitting independently risks breaking the pairing a model depends on.
-
 **Q: Why exclude `un-classified` labels rather than treating them as a 5th class?**
-A: `un-classified` isn't a genuine damage severity level — it's an annotator's uncertainty marker (confirmed smaller/more ambiguous in Phase 2.5-2.6). Treating it as a predictable class would expand the project into a different problem (uncertainty detection) for negligible lost signal (under 1% of data).
+A: `un-classified` isn't a genuine damage severity level — it's an annotator's uncertainty marker. Treating it as a predictable class would expand the project into a different problem for negligible lost signal (under 1% of data).
 
 **Q: Why resize to 512×512 rather than training at full 1024×1024 resolution?**
-A: A quarter of the pixel count at 512×512 gives a real, necessary speed/memory improvement on CPU-only hardware, while still preserving enough detail for the median building size (~30-35px at full resolution, ~15-17px at 512×512) to remain clearly learnable — unlike a more aggressive downsize (e.g. 256×256), which would shrink the smallest buildings to just a few pixels.
+A: A quarter of the pixel count at 512×512 gives a real speed/memory improvement, while preserving enough detail for typical building sizes to remain clearly learnable — unlike a more aggressive downsize (256×256), which risks shrinking small buildings to just a few pixels.
 
-**Q: Why does the segmentation model use pre-disaster images only, not post-disaster or a pre/post pair?**
-A: Segmentation's only job is locating buildings — pre-disaster images show buildings intact and cleanly shaped, giving the clearest possible training signal. Post-disaster imagery can show partial collapse, debris, or obstruction, which would introduce noise into a task that doesn't need damage information at all. The pre/post *comparison* is deliberately deferred to Phase 5, which uses this model's building locations to guide damage classification on cropped regions from both images.
-
-**Q: Why separate `Dataset` classes for segmentation and classification, rather than one combined class?**
-A: The two tasks need structurally different data — segmentation needs a full image + binary building mask (confirmed to contain no damage information at all), while classification needs individual building crops + damage labels.
+**Q: Why does the segmentation model use pre-disaster images only?**
+A: Segmentation's only job is locating buildings — pre-disaster images show buildings intact and cleanly shaped, giving the clearest training signal. The pre/post *comparison* is deliberately deferred to Phase 5.
 
 **Q: Why is the U-Net architecture parameterized by `base_channels` instead of hardcoded?**
-A: Enables creating a lighter comparison variant (e.g. `base_channels=32`) for Phase 4.5's planned multi-architecture comparison, by reusing the same class rather than duplicating it with different hardcoded values — reducing the risk of an inconsistency between two separately-maintained versions.
+A: Enables creating a lighter comparison variant (e.g. `base_channels=32`) for Phase 4.5's planned multi-architecture comparison, by reusing the same class rather than duplicating it with different hardcoded values.
+
+**Q: Why `BCEWithLogitsLoss` specifically, rather than plain `BCELoss`?**
+A: The model's final layer outputs raw logits (unbounded values), not probabilities. `BCEWithLogitsLoss` applies sigmoid and computes cross-entropy in one numerically stable step, avoiding precision issues from doing sigmoid and BCE separately.
+
+**Q: Why isn't a link to the training data provided anywhere in this repo?**
+A: Per `docs/scope_and_assumptions.md`, the xBD dataset is not covered by this repo's MIT license and is subject to xView2/DIU's own terms. Even a personal cloud storage link would constitute unauthorized redistribution — the dataset is referenced only via the official xView2 download page.
 
 **Q: Why MIT license, and why isn't the dataset included in the repo?**
 A: MIT covers the project's own code. xBD has its own usage terms set by CMU SEI/DIU — dataset files are excluded from version control and credited via link instead.

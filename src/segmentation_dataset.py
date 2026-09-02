@@ -1,6 +1,7 @@
 from PIL import Image
 from pathlib import Path
 import random
+from torchvision import transforms
 from torchvision.transforms import functional as TF
 from torchvision.transforms import InterpolationMode
 
@@ -33,6 +34,9 @@ class SegmentationDataset:
         # Downsampling (1024, 1024) to (512, 512)
         image = image.resize((512, 512), Image.Resampling.LANCZOS) 
         target = target.resize((512, 512), Image.Resampling.NEAREST) # preserving [0, 1]
+        
+        image = transforms.ToTensor()(image)
+        target = transforms.ToTensor()(target)
         
         # ------- Augmentation Pipeline Design ------------
         if self.augment:

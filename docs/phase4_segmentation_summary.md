@@ -4,47 +4,42 @@
 Build and train a CNN-based segmentation model that locates buildings in pre-disaster satellite imagery, producing the building-location foundation Phase 5 will use to guide damage classification.
 
 ## 4.1 — CNN & Segmentation Fundamentals (Concept)
-Documented before writing any model code:
-
-- **Convolution:** a small learned kernel slides across the image, producing a feature map that highlights where a specific pattern appears. The same kernel is reused across every position, letting the model recognize a pattern (e.g. an edge) regardless of where it appears in the image.
-- **Pooling:** max pooling shrinks feature maps by keeping the strongest value in small regions, reducing computation and adding tolerance to small positional shifts.
-- **Encoder:** stacked (convolution → pooling) rounds progressively shrink spatial size while growing feature richness, compressing the image into a dense understanding — at the cost of precise pixel-location detail.
-- **Decoder:** reverses the encoder, upsampling back toward the original size to produce a full pixel-by-pixel output mask (required for segmentation, unlike classification's single-label output).
-- **Skip connections (U-Net's defining feature):** at each encoder stage, the feature map is copied across to the matching decoder stage before further shrinking occurs. This gives the decoder both the deep, compressed understanding AND the precise spatial detail that would otherwise be lost — producing a sharp, accurate mask instead of a blurry one.
+- **Convolution:** a small learned kernel slides across the image, producing a feature map highlighting where a pattern appears — the same kernel is reused everywhere, letting the model recognize a pattern regardless of position.
+- **Pooling:** max pooling shrinks feature maps by keeping the strongest value in small regions, reducing computation and adding positional tolerance.
+- **Encoder:** stacked (convolution → pooling) rounds shrink spatial size while growing feature richness — compressing toward understanding, at the cost of precise pixel-location detail.
+- **Decoder:** reverses the encoder, upsampling back toward the original size to produce a full pixel-by-pixel output mask.
+- **Skip connections (U-Net's defining feature):** encoder feature maps are copied directly to the matching decoder stage before further shrinking, giving the decoder both deep understanding and precise spatial detail — preventing a blurry output.
 
 ## 4.2 — U-Net Architecture (Built & Verified)
-Built incrementally in PyTorch, verifying each component's output shape against hand-calculated expectations on a dummy input before proceeding to the next.
+Built incrementally in PyTorch (`src/unet.py`), verifying each component's output shape against hand-calculated expectations before assembly:
 
-**Components** (all in `src/unet.py`):
-- `EncoderBlock(in_channels, out_channels)` — conv→relu→conv→relu→[save skip]→pool
-- `Bottleneck(in_channels, out_channels)` — same conv pattern, no pooling, no skip (deepest point of the U)
-- `DecoderBlock(in_channels, skip_channels, out_channels)` — upsample (`ConvTranspose2d`) → concatenate with matching skip connection (`torch.cat`, channel dimension) → conv→relu→conv→relu
-- `UNet(base_channels=64)` — assembles 3 encoder blocks, 1 bottleneck, 3 decoder blocks, and a final 1×1 output convolution collapsing to a single channel
-
-**Design decisions:**
-- **Parameterized `base_channels`** (default 64, the standard convention from the original U-Net paper) rather than hardcoded channel counts, so a lighter variant (e.g. `base_channels=32`) can be created for the Phase 4.5 multi-architecture comparison by reusing the same class.
-- **Verification-first construction** — each block was tested independently on a dummy tensor immediately after being written, confirming exact output shapes before assembly, rather than writing the full architecture and debugging shape errors afterward.
-
-**Verified shape progression** (input 512×512×3, `base_channels=64`):
-
-| Stage | Shape |
+| Stage | Shape (base_channels=64) |
 |---|---|
 | Input | (1, 3, 512, 512) |
-| After `block1` (pooled) | (1, 64, 256, 256) |
-| After `block2` (pooled) | (1, 128, 128, 128) |
-| After `block3` (pooled) | (1, 256, 64, 64) |
+| After `block1`/`block2`/`block3` (pooled) | (1, 64, 256, 256) → (1, 128, 128, 128) → (1, 256, 64, 64) |
 | After `bottleneck` | (1, 512, 64, 64) |
-| After `decoder_block3` | (1, 256, 128, 128) |
-| After `decoder_block2` | (1, 128, 256, 256) |
-| After `decoder_block1` | (1, 64, 512, 512) |
+| After `decoder_block3`/`2`/`1` | (1, 256, 128, 128) → (1, 128, 256, 256) → (1, 64, 512, 512) |
 | After `final_conv` (assembled `UNet`) | (1, 1, 512, 512) |
 
-The assembled `UNet` class reproduces the exact same output shape as the manually-chained component test, confirming correctness after moving the code to `src/unet.py`.
+Parameterized by `base_channels` (default 64) so a lighter comparison variant can be created for Phase 4.5 without duplicating the class.
+
+## 4.3 — Loss Function, Optimizer, and Training Loop
+- **Loss: `BCEWithLogitsLoss`** — matches the model's raw-logit output (unbounded values from `final_conv`) and the binary per-pixel ground truth; applies sigmoid + BCE in one numerically stable step.
+- **Optimizer: `Adam`**, `lr=1e-4`, given `model.parameters()`.
+- **Training loop, per batch:** `optimizer.zero_grad()` → `model(images)` → `criterion(prediction, mask)` → `loss.backward()` → `optimizer.step()`.
+
+**Bug found and fixed:** `SegmentationDataset.__getitem__` returned PIL Image objects, not tensors. Unnoticed in Phase 3.3's single-item testing (`dataset[0]` doesn't require batching); surfaced when `DataLoader` tried to batch multiple PIL Images together (`TypeError: default_collate: batch must contain tensors...`). Fixed by adding `torchvision.transforms.ToTensor()` as the final step in `__getitem__`, after resizing and augmentation.
+
+**Verification results:**
+- First-batch loss: 0.7508 — close to the theoretical random-guessing baseline for BCE (≈0.693, i.e. -ln(0.5)), confirming the full pipeline (Dataset → DataLoader → model → loss → backprop → optimizer) is correctly wired, not just error-free.
+- Measured per-batch time: ~2 minutes (5 batches in ~10 minutes) on local CPU.
+- Projected: ~3 hours per epoch, ~90 hours for a full ~30-epoch run — confirms local CPU training is infeasible for real experimentation, exactly the scenario anticipated in `docs/scope_and_assumptions.md`.
+
+**Decision:** local training stopped after confirming pipeline correctness (its actual purpose). Real training moves to free-tier Colab/Kaggle GPU in Phase 4.4. Training data for the 3 confirmed disasters (~2.5GB: images, labels, targets) plus `train_ids.txt`/`val_ids.txt`/`src/unet.py`/`src/segmentation_dataset.py` uploaded to a personal Google Drive account for Colab access — kept private, not linked publicly, per the dataset's licensing terms (the xBD dataset is not covered by this repo's MIT license).
 
 ## Remaining Phase 4 Tasks
-- **4.3** — Loss function, optimizer, and training loop
-- **4.4** — Training on Colab/Kaggle GPU (per hardware-scoping decision)
-- **4.5** — Training multiple candidate segmentation architectures (per the multi-model comparison decision)
+- **4.4** — Training on Colab/Kaggle GPU
+- **4.5** — Training multiple candidate segmentation architectures (multi-model comparison)
 - **4.6** — Monitoring training/validation loss and overfitting
 - **4.7** — Selecting the best segmentation model
 - **4.8** — Saving trained model weights
