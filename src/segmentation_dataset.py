@@ -4,6 +4,8 @@ import random
 from torchvision import transforms
 from torchvision.transforms import functional as TF
 from torchvision.transforms import InterpolationMode
+import numpy as np
+import torch
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 IMAGES_DIR = PROJECT_ROOT / "data" / "raw" / "train" / "images"
@@ -36,7 +38,7 @@ class SegmentationDataset:
         target = target.resize((512, 512), Image.Resampling.NEAREST) # preserving [0, 1]
         
         image = transforms.ToTensor()(image)
-        target = transforms.ToTensor()(target)
+        target = torch.from_numpy(np.array(target)).float().unsqueeze(0)  # FIXED: no /255 scaling
         
         # ------- Augmentation Pipeline Design ------------
         if self.augment:
