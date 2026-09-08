@@ -4,7 +4,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python&logoColor=white)
 ![PyTorch](https://img.shields.io/badge/PyTorch-CPU--Build-EE4C2C?logo=pytorch&logoColor=white)
-![Status](https://img.shields.io/badge/Status-Phase%204%20Complete-brightgreen)
+![Status](https://img.shields.io/badge/Status-Phase%205%20Complete-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Dataset](https://img.shields.io/badge/Dataset-xBD%20%2F%20xView2-blueviolet)
 
@@ -110,7 +110,7 @@ Satellites already capture before/after imagery of disaster zones quickly. **The
 | 2 | Exploratory Data Analysis | ✅ Complete |
 | 3 | Preprocessing & Augmentation Pipeline | ✅ Complete |
 | 4 | Building Localization / Segmentation Model | ✅ Complete (final model selection deferred to Phase 6) |
-| 5 | Damage Classification (Transfer Learning) | ⬜ Not Started |
+| 5 | Damage Classification (Transfer Learning) | ✅ Complete (final model selection deferred to Phase 6) |
 | 6 | Evaluation — Segmentation & Classification Metrics | ⬜ Not Started |
 | 7 | Held-Out Disaster-Type Generalization Test | ⬜ Not Started |
 | 8 | Benchmark Comparison Against Published Results | ⬜ Not Started |
@@ -119,35 +119,29 @@ Satellites already capture before/after imagery of disaster zones quickly. **The
 | 11 | Streamlit Demo Dashboard | ⬜ Not Started |
 | 12 | Documentation & README | 🔄 Ongoing (this file) |
 
-### ✅ Phase 0-3
-Environment/repo setup, dataset verification (2,799 pairs, zero mismatches), evidence-based EDA and training-disaster selection, and a verified preprocessing pipeline (`SegmentationDataset`, 80/20 split, training-only augmentation). Full details in `docs/scope_and_assumptions.md`, `docs/phase1_dataset_verification.md`, `docs/phase2_eda_summary.md`, `docs/phase3_preprocessing_summary.md`.
+### ✅ Phase 0 — Environment, Repo Structure & Scoping Decisions
+Set up the repo, Python environment, and PyTorch (CPU build), and documented the project's hardware constraints and honest scope upfront — before any modeling began.
+📓 *(no notebook — environment setup)* · 📄 [scope_and_assumptions.md](docs/scope_and_assumptions.md)
+
+### ✅ Phase 1 — Dataset Acquisition & Verification
+Downloaded and SHA1-verified the xBD dataset, confirmed folder structure and full count parity across all 10 disaster types (2,799 pairs, zero mismatches), and visually verified label alignment.
+📓 [01_dataset_verification.ipynb](notebooks/01_dataset_verification.ipynb) · 📄 [phase1_dataset_verification.md](docs/phase1_dataset_verification.md)
+
+### ✅ Phase 2 — Exploratory Data Analysis
+Made an evidence-based, full-count comparison across all 10 disaster types to select the final 3-disaster training set, characterized building size/resolution/density, and applied statistical validation (chi-square, KS-test) throughout.
+📓 [02_eda.ipynb](notebooks/02_eda.ipynb) · 📄 [phase2_eda_summary.md](docs/phase2_eda_summary.md)
+
+### ✅ Phase 3 — Preprocessing & Augmentation Pipeline
+Built a leakage-free 80/20 train/validation split by location ID, decided how to handle ambiguous `un-classified` labels, and built/verified the `SegmentationDataset` pipeline with training-only augmentation.
+📓 [03_preprocessing.ipynb](notebooks/03_preprocessing.ipynb) · 📄 [phase3_preprocessing_summary.md](docs/phase3_preprocessing_summary.md)
 
 ### ✅ Phase 4 — Building Localization / Segmentation Model
+Built and trained a U-Net segmentation model from scratch on GPU (Colab/Kaggle), diagnosing and fixing a serious data-corruption bug along the way (a mask-scaling error that caused the model to collapse to all-background predictions), then trained and compared two architecture variants. Final model selection is explicitly deferred to Phase 6, pending formal IoU/Dice evaluation.
+📓 [04_segmentation.ipynb](notebooks/04_segmentation.ipynb) · 📄 [phase4_segmentation_summary.md](docs/phase4_segmentation_summary.md)
 
-**4.1-4.2 — CNN/U-Net fundamentals and architecture.** U-Net built and verified in `src/unet.py` (`EncoderBlock`, `Bottleneck`, `DecoderBlock`, `UNet`), parameterized by `base_channels` for multi-architecture comparison. Verified end-to-end: 512×512×3 input → 512×512×1 output.
-
-**4.3 — Loss function, optimizer, training loop.** `BCEWithLogitsLoss` + `Adam` (lr=1e-4). Bug found and fixed: `SegmentationDataset` returned PIL Images instead of tensors, breaking `DataLoader` batching — fixed with `torchvision.transforms.ToTensor()`. Local CPU speed measured at ~2 min/batch (~3 hr/epoch projected) — confirmed training must move to GPU.
-
-**4.4 — GPU training (Colab).** A serious debugging arc:
-- First GPU training attempt showed a suspiciously fast loss collapse and, visually, the model predicted pure black (no buildings) despite a building-dense input.
-- **Hypothesis 1 (pixel class imbalance, 90.77% background):** `pos_weight=9.84` applied — model became *more* confident in all-background over 8 epochs. Rejected by evidence.
-- **Hypothesis 2 (BCE unsuited to severe imbalance):** Dice Loss added — same declining trend. Rejected by evidence.
-- **Root cause found:** `ToTensor()` was silently dividing the mask's clean `0`/`1` values by 255 (correct for photos, wrong for label data), corrupting the ground truth itself.
-- **Fixed** with a direct, non-rescaling tensor conversion for the mask. A fresh 20-epoch run (BCE + Dice, no `pos_weight`) showed smooth, consistent loss decline (1.28 → 0.56) and genuine, if imprecise, building-shaped predictions.
-- Measured GPU speedup: ~2.3 min/epoch vs. ~3 hr/epoch projected on CPU — roughly a **230x speedup**.
-
-**4.5 — Multi-architecture comparison (Kaggle, after Colab's free GPU quota was exhausted).** Trained `UNet(base_channels=32)` under identical conditions as the `base_channels=64` baseline.
-- `base_channels=64`: final loss 0.5625, ~46 min training time
-- `base_channels=32`: final loss 0.6862, ~34 min training time (~25% faster)
-- Both candidates' weights saved (`models/unet_baseline_20epochs.pt`, `models/unet_light_20epochs.pt`); a re-uploaded, pre-fix copy of `segmentation_dataset.py` was caught and corrected via a data-integrity check before this run.
-
-**4.6 — Training loss monitoring.** Neither model had plateaued by epoch 20 — both still improving meaningfully. `base_channels=32` declined faster early but slowed more in the second half; `base_channels=64` sustained a steadier improvement rate and pulled ahead after epoch ~9. **Honest limitation:** validation loss was not tracked per epoch in these runs, so a proper overfitting check isn't yet possible.
-
-**4.7 — Final model selection: explicitly deferred to Phase 6**, not left unresolved by default. Training-loss evidence alone, from two non-converged models and a single validation image, was judged insufficient for a confident final choice — Phase 6's planned IoU/Dice evaluation and paired significance test is the appropriate basis for this decision.
-
-**4.8 — Model weight saving: partially complete.** Both candidates' weights are already saved and loadable. Finalizing which is "the" model (e.g. renaming to `unet_final.pt`) is deferred alongside 4.7, pending Phase 6's decision — the non-selected candidate will be retained, not discarded, since the comparison itself is a documented part of this project's evaluation process.
-
-**4.9 (visual sanity check) was intentionally not run as a separate step** — its substance was already covered informally during the 4.4-4.5 debugging process (repeated input/ground-truth/prediction visualizations), and a final, formal version on the selected model fits more naturally as part of Phase 6's evaluation write-up than as a repeated Phase 4 step.
+### ✅ Phase 5 — Damage Classification (Transfer Learning)
+Built a building-crop classifier using transfer learning (frozen pretrained backbones with a new final layer), diagnosed and fixed a class-imbalance shortcut using weighted loss, built a precomputed-crop caching pipeline for a ~7-8x training speedup, and trained three candidate backbones (ResNet-50, EfficientNet-B0, MobileNet-V2). Final model selection is explicitly deferred to Phase 6, since the comparison is confounded by an augmentation difference between the baseline and comparison models.
+📓 [05_classification.ipynb](notebooks/05_classification.ipynb) · 📄 [phase5_classification_summary.md](docs/phase5_classification_summary.md)
 
 ---
 
@@ -177,23 +171,28 @@ disaster-damage-assessment/
 ├── app/                          # FastAPI + Streamlit application code (Phase 10-11)
 ├── data/
 │   ├── raw/                      # Downloaded xBD imagery (gitignored)
-│   └── processed/                # train_ids.txt, val_ids.txt, loss_history*.json (gitignored)
+│   └── processed/                # IDs, loss/accuracy histories, precomputed crops (gitignored)
 ├── docs/
 │   ├── scope_and_assumptions.md
 │   ├── phase1_dataset_verification.md
 │   ├── phase2_eda_summary.md
 │   ├── phase3_preprocessing_summary.md
-│   └── phase4_segmentation_summary.md   # Phase 4 model architecture, training, comparison
-├── models/                       # unet_baseline_20epochs.pt, unet_light_20epochs.pt (gitignored)
+│   ├── phase4_segmentation_summary.md
+│   └── phase5_classification_summary.md
+├── models/                       # Trained model weights (gitignored)
 ├── notebooks/
 │   ├── 01_dataset_verification.ipynb
 │   ├── 02_eda.ipynb
 │   ├── 03_preprocessing.ipynb
-│   └── 04_segmentation.ipynb
+│   ├── 04_segmentation.ipynb
+│   └── 05_classification.ipynb
 ├── src/
 │   ├── verify_dataset.py
 │   ├── segmentation_dataset.py
-│   └── unet.py
+│   ├── unet.py
+│   ├── classification_dataset.py
+│   ├── precomputed_classification_dataset.py
+│   └── precomputed_training_dataset.py
 ├── .gitignore
 ├── LICENSE
 ├── README.md
@@ -204,11 +203,19 @@ disaster-damage-assessment/
 
 ## 🐛 Problems Faced & How They Were Solved
 
-**1-9.** Windows path-length limits, `.gitignore` gaps, `shasum` unavailable on Windows, a silent validation bug, an overstated `socal-fire` visual sample, `ModuleNotFoundError` from `src/` imports, fragile relative paths, a `DataLoader` batching failure (fixed with `ToTensor()`), and infeasible local CPU training speed — all detailed in earlier phase docs.
+**1-9 (Phases 0-4).** Windows path-length limits, `.gitignore` gaps, `shasum` unavailable on Windows, a silent validation bug, an overstated `socal-fire` visual sample, `ModuleNotFoundError` from `src/` imports, fragile relative paths, a `DataLoader` batching failure, and infeasible local CPU training speed — all detailed in `docs/phase1_dataset_verification.md` through `docs/phase4_segmentation_summary.md`.
 
-**10. A critical, multi-step data corruption bug in the segmentation mask pipeline.** The model appeared to be learning (loss dropping fast) but was actually predicting pure background everywhere. Two principled, evidence-based fixes (`pos_weight` for class imbalance, then Dice Loss) both failed — the repeated failure of two independent fixes was the signal to look upstream. Root cause: `ToTensor()`'s automatic 0-255→0-1 rescaling, applied uniformly to both image and mask, silently corrupted the mask's clean `0`/`1` labels into `0`/`0.0039`. Fixed with a direct, non-rescaling tensor conversion for the mask only.
+**10. A critical, multi-step data corruption bug in the segmentation mask pipeline (Phase 4.4).** The model appeared to be learning but was actually predicting pure background everywhere. Two principled fixes (`pos_weight`, then Dice Loss) both failed by evidence before the real cause — `ToTensor()` silently rescaling the mask's `0`/`1` labels by dividing by 255 — was found and fixed.
 
-**11. Colab free-tier GPU quota exhausted mid-project.** Training moved to Kaggle Notebooks (separate free GPU quota) for Phase 4.5 — a pre-fix copy of `segmentation_dataset.py` was initially re-uploaded there and caught via a data-integrity check before retraining, preventing a repeat of problem #10 on the new platform.
+**11. Colab free-tier GPU quota exhausted mid-project (Phase 4.5).** Training moved to Kaggle Notebooks — a pre-fix copy of `segmentation_dataset.py` was caught and corrected there before retraining.
+
+**12. A class-imbalance shortcut in the damage classifier (Phase 5.4).** An unweighted classifier scored a deceptively reasonable 64.39% overall accuracy after 1 epoch, but per-class accuracy revealed it had learned to almost always predict the majority class (`no-damage`: 96.83%, `minor-damage`: 4.23%). Fixed with inverse-frequency class weighting in `CrossEntropyLoss`.
+
+**13. Redundant, repeated crop computation slowed classifier training (Phase 5.4-5.6).** `ClassificationDataset` recomputed the same crop/resize operation for the same building on every epoch, despite the result never changing. Fixed with a one-time precomputed-crop caching pipeline, reducing per-epoch training time by roughly 7-8x for the Phase 5.6 comparison models.
+
+**14. A precomputation class silently discarded labels.** An early version of `PrecomputedClassificationDataset` saved cropped images but never recorded their damage labels anywhere, making the cache unusable for training. Fixed by building and saving an explicit `manifest.json`.
+
+**15. A hardcoded output folder risked silently overwriting train/validation caches.** `PrecomputedClassificationDataset` originally used one fixed `PROCESSED_DIR`, meaning a validation precompute run would silently overwrite the training run's manifest and crops. Fixed by making the output directory a required constructor parameter, so train and validation caches are kept in separate, explicit locations.
 
 ---
 
@@ -217,29 +224,20 @@ disaster-damage-assessment/
 **Q: Why not use the full xBD dataset?**
 A: Impractical on an 8GB RAM, GPU-less laptop within a reasonable iteration loop. A focused subset allows honest, fast iteration.
 
-**Q: Why train on Colab/Kaggle for some phases instead of fully locally?**
-A: Confirmed with a live measurement (~2 min/batch locally, ~3 hr/epoch projected) vs. ~2.3 min/epoch on a free Tesla T4 GPU — roughly a 230x speedup. When Colab's free-tier quota was exhausted mid-project, training moved to Kaggle's separate free GPU quota rather than waiting or reverting to CPU.
+**Q: Why train on Colab/Kaggle instead of fully locally?**
+A: Confirmed with live measurements — segmentation projected ~3 hr/epoch locally vs. ~2.3 min/epoch on a free GPU (~230x speedup); classifier training showed a similar CPU/GPU gap. When Colab's free-tier quota was exhausted mid-project, training moved to Kaggle's separate free GPU quota.
 
 **Q: Why 3 training disasters instead of 2? Why these specific ones?**
 A: See [Dataset & Training Set Rationale](#-dataset--training-set-rationale) above.
 
-**Q: Why does the segmentation model use pre-disaster images only?**
-A: Segmentation's only job is locating buildings — pre-disaster images show buildings intact and cleanly shaped, giving the clearest training signal. The pre/post *comparison* is deliberately deferred to Phase 5.
+**Q: Why does the segmentation model use pre-disaster images, but the classifier use post-disaster images?**
+A: Segmentation's only job is locating buildings — pre-disaster imagery shows them intact and cleanly shaped. Classification's job is judging damage, which is only visible in post-disaster imagery. The pre/post *comparison* itself is a natural extension for future work, using each model for its respective strength.
 
-**Q: Why combine BCE with Dice Loss?**
-A: Standard practice for imbalanced segmentation — BCE gives stable per-pixel gradients, Dice directly penalizes poor shape overlap and is far less exploitable by an "always predict background" shortcut than BCE alone.
+**Q: Why transfer learning (frozen pretrained backbones) for the classifier, rather than training a CNN from scratch as in Phase 4?**
+A: The classifier's dataset (~46,000 building crops) is far smaller than what's needed to learn general visual features from scratch. Reusing ImageNet-pretrained features and only training a new final layer is standard practice for small-data image tasks, and dramatically reduces both overfitting risk and required compute.
 
-**Q: Why was `pos_weight` removed after fixing the mask bug, rather than kept alongside it?**
-A: The severe class imbalance that originally justified `pos_weight=9.84` was partly an artifact of debugging a broken pipeline. Once the real bug was fixed, re-testing without `pos_weight` showed healthy, smooth convergence — confirming the extra weighting was unnecessary and could have caused a different overcorrection if kept.
-
-**Q: Why defer final model selection (4.7) and weight finalization (4.8) to Phase 6, rather than deciding now?**
-A: Neither candidate model had plateaued by epoch 20, and only training-loss and single-image visual evidence were available. Committing to a final architecture on this basis would be less rigorous than the standard applied throughout this project. Phase 6's planned IoU/Dice evaluation on the full validation set, plus a paired statistical significance test, is the appropriate and intended basis for this decision — both candidates' weights are already saved and ready for that evaluation.
-
-**Q: Why wasn't a formal Phase 4.9 visual check performed?**
-A: Its substance was already covered repeatedly and informally during the 4.4-4.5 debugging process. A final, formal visual check on the selected model fits more naturally as part of Phase 6's evaluation write-up, once a winner is actually chosen, than as a separate, repeated Phase 4 step.
-
-**Q: Why is the U-Net architecture parameterized by `base_channels` instead of hardcoded?**
-A: Enables creating a lighter comparison variant without duplicating the class — used directly in Phase 4.5.
+**Q: Why defer final model selection for both the segmentation model (Phase 4.7) and the classifier (Phase 5.7) to Phase 6?**
+A: In both cases, the available comparison evidence was judged insufficient for a confident, defensible choice — non-converged segmentation models with only training-loss evidence, and classifier candidates trained under inconsistent conditions (an augmentation difference between the baseline and comparison models). Phase 6's planned formal evaluation (IoU/Dice, per-class F1, confusion matrices, and a paired statistical significance test) is the appropriate and intended basis for both decisions.
 
 **Q: Why MIT license, and why isn't the dataset (or a personal cloud copy of it) linked anywhere in this repo?**
 A: MIT covers the project's own code only. The xBD dataset is subject to xView2/DIU's own terms; even a private cloud storage link used for personal Colab/Kaggle access is deliberately never published in this repo, to avoid any appearance of unauthorized redistribution.
@@ -248,7 +246,7 @@ A: MIT covers the project's own code only. The xBD dataset is subject to xView2/
 
 ## ▶️ How to Run
 
-> Phases 0-4 are complete (final model selection pending Phase 6) — full inference/demo instructions will be added as later phases are finished.
+> Phases 0-5 are complete (final model selections pending Phase 6) — full inference/demo instructions will be added as later phases are finished.
 
 ```bash
 git clone https://github.com/husnainalix77/disaster-damage-assessment.git
@@ -270,7 +268,7 @@ Dataset (not included in repo — download separately):
 python src/verify_dataset.py
 ```
 
-> **Note on Phase 4 training cells:** the training loop code in `notebooks/04_segmentation.ipynb` reflects the local project's file structure for reproducibility, but was actually executed on Google Colab / Kaggle (GPU) due to hardware constraints established in Phase 0 — running it locally as-is would work but take significantly longer (~3 hours/epoch on CPU vs. ~2.3 minutes/epoch on a free GPU).
+> **Note on GPU training cells:** the training loop code in `notebooks/04_segmentation.ipynb` and `notebooks/05_classification.ipynb` reflects the local project's file structure for reproducibility, but was actually executed on Google Colab / Kaggle (GPU) due to hardware constraints established in Phase 0.
 
 ---
 
