@@ -8,16 +8,16 @@ import numpy as np
 import torch
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-IMAGES_DIR = PROJECT_ROOT / "data" / "raw" / "train" / "images"
-TARGETS_DIR = PROJECT_ROOT / "data" / "raw" / "train" / "targets"
 
 class SegmentationDataset:
     """PyTorch-style Dataset supplying (pre-disaster image, binary building-mask) pairs for segmentation training."""
     
-    def __init__(self, location_ids, augment):
+    def __init__(self, location_ids, augment, split="train"):
         """Stores the list of location IDs this dataset instance will serve."""
         self.location_ids = location_ids
         self.augment = augment # augmentation only applies to training set
+        self.images_dir = PROJECT_ROOT / "data" / "raw" / split / "images"
+        self.targets_dir = PROJECT_ROOT / "data" / "raw" / split / "targets"
     
     def __len__(self):
         """Returns the total number of locations in this dataset."""
@@ -26,8 +26,8 @@ class SegmentationDataset:
     def __getitem__(self, index):
         """Loads and returns the pre-disaster image and its matching target mask for the location at the given index."""
         located_id = self.location_ids[index] # e.g. hurricane-harvey_00000042
-        image_path = IMAGES_DIR / f"{located_id}_pre_disaster.png"
-        target_path = TARGETS_DIR / f"{located_id}_pre_disaster_target.png"
+        image_path = self.images_dir / f"{located_id}_pre_disaster.png"
+        target_path = self.targets_dir / f"{located_id}_pre_disaster_target.png"
         
         # Original (1024, 1024) image and target
         image = Image.open(image_path)

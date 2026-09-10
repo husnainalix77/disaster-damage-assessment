@@ -5,8 +5,6 @@ from PIL import Image
 from torchvision import transforms
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-LABELS_DIR = PROJECT_ROOT / "data" / "raw" / "train" / "labels"
-IMAGES_DIR = PROJECT_ROOT / "data" / "raw" / "train" / "images"
 
 class ClassificationDataset:
     """Dataset for extracting building crops and their damage-class labels from disaster images."""
@@ -17,12 +15,14 @@ class ClassificationDataset:
         "destroyed" : 3
     }
     
-    def __init__(self, location_ids):
+    def __init__(self, location_ids, split="train"):
         """Initializes the dataset with building records from the given image IDs."""
         self.records = []
+        self.labels_dir = PROJECT_ROOT / "data" / "raw" / split / "labels"
+        self.images_dir = PROJECT_ROOT / "data" / "raw" / split / "images"
         
         for location_id in location_ids: #santa-rosa-wildfire_00000073
-            json_path = LABELS_DIR / f"{location_id}_post_disaster.json"
+            json_path = self.labels_dir / f"{location_id}_post_disaster.json"
             
             with open(json_path, "r") as f:
                 d = json.load(f)
@@ -49,7 +49,7 @@ class ClassificationDataset:
         min_x, min_y, max_x, max_y = polygon.bounds 
         
         # Load the post-disaster image
-        image_path = IMAGES_DIR / f"{location_id}_post_disaster.png"
+        image_path = self.images_dir / f"{location_id}_post_disaster.png"
         image = Image.open(image_path)
         
         # Add padding proportional to the building's own size (e.g. 15% of width/height)

@@ -69,13 +69,13 @@ Satellites already capture before/after imagery of disaster zones quickly. **The
                   └────────────┬─────────────┘
                                ▼
                   ┌─────────────────────────┐
-                  │  FastAPI Inference API   │
-                  │      (Dockerized)        │
-                  └────────────┬─────────────┘
+                  │  FastAPI Inference API  │
+                  │      (Dockerized)       │
+                  └────────────┬────────────┘
                                ▼
                   ┌─────────────────────────┐
-                  │   Streamlit Dashboard    │
-                  │   (Interactive Demo)     │
+                  │   Streamlit Dashboard   │
+                  │   (Interactive Demo)    │
                   └─────────────────────────┘
 ```
 
@@ -111,7 +111,7 @@ Satellites already capture before/after imagery of disaster zones quickly. **The
 | 3 | Preprocessing & Augmentation Pipeline | ✅ Complete |
 | 4 | Building Localization / Segmentation Model | ✅ Complete (final model selection deferred to Phase 6) |
 | 5 | Damage Classification (Transfer Learning) | ✅ Complete (final model selection deferred to Phase 6) |
-| 6 | Evaluation — Segmentation & Classification Metrics | ⬜ Not Started |
+| 6 | Evaluation — Segmentation & Classification Metrics | ✅ Complete |
 | 7 | Held-Out Disaster-Type Generalization Test | ⬜ Not Started |
 | 8 | Benchmark Comparison Against Published Results | ⬜ Not Started |
 | 9 | Experiment Tracking & Explainability | ⬜ Not Started |
@@ -142,6 +142,10 @@ Built and trained a U-Net segmentation model from scratch on GPU (Colab/Kaggle),
 ### ✅ Phase 5 — Damage Classification (Transfer Learning)
 Built a building-crop classifier using transfer learning (frozen pretrained backbones with a new final layer), diagnosed and fixed a class-imbalance shortcut using weighted loss, built a precomputed-crop caching pipeline for a ~7-8x training speedup, and trained three candidate backbones (ResNet-50, EfficientNet-B0, MobileNet-V2). Final model selection is explicitly deferred to Phase 6, since the comparison is confounded by an augmentation difference between the baseline and comparison models.
 📓 [05_classification.ipynb](notebooks/05_classification.ipynb) · 📄 [phase5_classification_summary.md](docs/phase5_classification_summary.md)
+
+### ✅ Phase 6 — Evaluation, Model Selection & Final Test-Set Results
+Resolved both deferred model-selection decisions (Phase 4.7, Phase 5.7) using full-validation-set IoU/Dice, precision/recall/F1, confusion matrices, and statistical significance testing. Retrained and adopted an improved segmentation model; retrained and evaluated (but did not adopt) an augmented classifier, since it showed no clear improvement. Final models evaluated exactly once on the untouched test set: segmentation IoU 0.5136 / Dice 0.6378; classification macro F1 0.53.
+📓 [06_evaluation.ipynb](notebooks/06_evaluation.ipynb) · 📄 [phase6_evaluation_summary.md](docs/phase6_evaluation_summary.md)
 
 ---
 
