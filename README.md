@@ -112,7 +112,7 @@ Satellites already capture before/after imagery of disaster zones quickly. **The
 | 4 | Building Localization / Segmentation Model | ✅ Complete (final model selection deferred to Phase 6) |
 | 5 | Damage Classification (Transfer Learning) | ✅ Complete (final model selection deferred to Phase 6) |
 | 6 | Evaluation — Segmentation & Classification Metrics | ✅ Complete |
-| 7 | Held-Out Disaster-Type Generalization Test | ⬜ Not Started |
+| 7 | Held-Out Disaster-Type Generalization Test | ✅ Complete |
 | 8 | Benchmark Comparison Against Published Results | ⬜ Not Started |
 | 9 | Experiment Tracking & Explainability | ⬜ Not Started |
 | 10 | Deployment — FastAPI + Docker | ⬜ Not Started |
@@ -146,6 +146,10 @@ Built a building-crop classifier using transfer learning (frozen pretrained back
 ### ✅ Phase 6 — Evaluation, Model Selection & Final Test-Set Results
 Resolved both deferred model-selection decisions (Phase 4.7, Phase 5.7) using full-validation-set IoU/Dice, precision/recall/F1, confusion matrices, and statistical significance testing. Retrained and adopted an improved segmentation model; retrained and evaluated (but did not adopt) an augmented classifier, since it showed no clear improvement. Final models evaluated exactly once on the untouched test set: segmentation IoU 0.5136 / Dice 0.6378; classification macro F1 0.53.
 📓 [06_evaluation.ipynb](notebooks/06_evaluation.ipynb) · 📄 [phase6_evaluation_summary.md](docs/phase6_evaluation_summary.md)
+
+### ✅ Phase 7 — Held-Out Disaster-Type Generalization Test
+Evaluated both final models on `mexico-earthquake`, reserved untouched since Phase 2 specifically for this purpose. The segmentation model degrades moderately on unseen earthquake imagery (IoU 0.51 → 0.37, Dice 0.64 → 0.53) but remains functional. The classifier fails severely on 3 of 4 damage classes (macro F1 0.53 → 0.16), while retaining moderate performance on the dominant `no-damage` class — an honest, directly-measured limitation, consistent with the project's stated scope since Phase 0.
+📓 [07_generalization_test.ipynb](notebooks/07_generalization_test.ipynb) · 📄 [phase7_generalization_summary.md](docs/phase7_generalization_summary.md)
 
 ---
 

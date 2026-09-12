@@ -57,6 +57,24 @@ class DisasterInspector:
             # Match check: images count must equal labels count and targets count
             status = "OK" if (images_count == labels_count == targets_count and images_count > 0) else "MISMATCH!"
             print(f"{disaster:<22} | {images_count:<8} | {labels_count:<8} | {targets_count:<8} | {status}")
+    
+    def display_disaster_summary(self, disaster_name):
+        """Prints a comparison table verifying folder file parity for a specific disaster."""
+        if disaster_name not in self.counts:
+            print(f"No data found for: {disaster_name}")
+            return
+        
+        f_counts = self.counts[disaster_name]
+        images_count = f_counts['images']
+        labels_count = f_counts['labels']
+        targets_count = f_counts['targets']
+        
+        status = "OK" if (images_count == labels_count == targets_count and images_count > 0) else "MISMATCH!"
+        
+        # Print the result
+        print(f"{'Disaster Name':<22} | {'Images':<8} | {'Labels':<8} | {'Targets':<8} | {'Parity Status'}")
+        print("-" * 65)
+        print(f"{disaster_name:<22} | {images_count:<8} | {labels_count:<8} | {targets_count:<8} | {status}")
         
 # Main Execution Workflow
 if __name__ == "__main__":
