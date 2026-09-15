@@ -113,7 +113,7 @@ Satellites already capture before/after imagery of disaster zones quickly. **The
 | 5 | Damage Classification (Transfer Learning) | ✅ Complete (final model selection deferred to Phase 6) |
 | 6 | Evaluation — Segmentation & Classification Metrics | ✅ Complete |
 | 7 | Held-Out Disaster-Type Generalization Test | ✅ Complete |
-| 8 | Benchmark Comparison Against Published Results | ⬜ Not Started |
+| 8 | Benchmark Comparison Against Published Results | ✅ Complete |
 | 9 | Experiment Tracking & Explainability | ⬜ Not Started |
 | 10 | Deployment — FastAPI + Docker | ⬜ Not Started |
 | 11 | Streamlit Demo Dashboard | ⬜ Not Started |
@@ -150,6 +150,10 @@ Resolved both deferred model-selection decisions (Phase 4.7, Phase 5.7) using fu
 ### ✅ Phase 7 — Held-Out Disaster-Type Generalization Test
 Evaluated both final models on `mexico-earthquake`, reserved untouched since Phase 2 specifically for this purpose. The segmentation model degrades moderately on unseen earthquake imagery (IoU 0.51 → 0.37, Dice 0.64 → 0.53) but remains functional. The classifier fails severely on 3 of 4 damage classes (macro F1 0.53 → 0.16), while retaining moderate performance on the dominant `no-damage` class — an honest, directly-measured limitation, consistent with the project's stated scope since Phase 0.
 📓 [07_generalization_test.ipynb](notebooks/07_generalization_test.ipynb) · 📄 [phase7_generalization_summary.md](docs/phase7_generalization_summary.md)
+
+### ✅ Phase 8 — Benchmark Comparison Against Published Results
+Compared this project's final results against the official xBD dataset baseline and top xView2 challenge solutions. Building IoU (0.5136) and classification F1 (0.53) sit below published full-dataset, multi-GPU-cluster results, with the gap attributed to documented, legitimate differences in dataset scale (888 vs. 22,068 image pairs), compute, and architecture complexity — not a methodology flaw. Notably, this project's `minor-damage` performance is consistent with (and slightly better than) top published solutions, confirming this is a field-wide difficulty, not a project-specific weakness.
+📓 [08_benchmark_comparison.ipynb](notebooks/08_benchmark_comparison.ipynb) · 📄 [phase8_benchmark_summary.md](docs/phase8_benchmark_summary.md)
 
 ---
 
