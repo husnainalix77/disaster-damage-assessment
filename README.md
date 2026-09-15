@@ -46,27 +46,27 @@ Satellites already capture before/after imagery of disaster zones quickly. **The
 
 ```
    ┌─────────────────────┐        ┌─────────────────────┐
-   │  Pre-Disaster Image  │        │ Post-Disaster Image │
-   └──────────┬───────────┘        └──────────┬───────────┘
-              │                               │
-              └───────────────┬───────────────┘
+   │  Pre-Disaster Image │        │ Post-Disaster Image │
+   └──────────┬──────────┘        └──────────┬──────────┘
+              │                              │
+              └───────────────┬──────────────┘
+                              ▼
+                  ┌─────────────────────────┐
+                  │   Preprocessing &       │
+                  │   Augmentation Pipeline │
+                  └────────────┬────────────┘
                                ▼
                   ┌─────────────────────────┐
-                  │   Preprocessing &        │
-                  │   Augmentation Pipeline  │
-                  └────────────┬─────────────┘
+                  │  Building Segmentation  │
+                  │      (U-Net CNN)        │
+                  └────────────┬────────────┘
                                ▼
                   ┌─────────────────────────┐
-                  │  Building Segmentation   │
-                  │      (U-Net CNN)         │
-                  └────────────┬─────────────┘
-                               ▼
-                  ┌─────────────────────────┐
-                  │  Damage Classification   │
-                  │ (Transfer-Learned CNN)   │
-                  │  No Dmg / Minor / Major  │
-                  │      / Destroyed         │
-                  └────────────┬─────────────┘
+                  │  Damage Classification  │
+                  │ (Transfer-Learned CNN)  │
+                  │  No Dmg / Minor / Major │
+                  │      / Destroyed        │
+                  └────────────┬────────────┘
                                ▼
                   ┌─────────────────────────┐
                   │  FastAPI Inference API  │
@@ -286,11 +286,12 @@ python src/verify_dataset.py
 
 ### Husnain Maroof
 
-**Mechatronics & Control Engineering Student** · UET Lahore
+**Final Year Mechatronics & Control Engineering Student** · UET Lahore
 
-Self-taught in Python and data science for 2+ years — building applied ML/DL projects end-to-end, from raw data through deployment, outside a formal data science curriculum. Currently deepening a background in imbalanced classification, statistical validation, and explainability (via the [transaction-fraud-risk-engine](https://github.com/husnainalix77/transaction-fraud-risk-engine) project) into deep learning and computer vision with this project.
+*Open to remote opportunities in Data Science & ML Engineering*
 
-Also researching SUPARCO-sponsored optical beacon tracking as part of a Final Year Project, and building toward a career in applied data science and machine learning.
+Building applied ML/DL projects end-to-end, from raw data through deployment, outside a formal data science curriculum. Currently deepening a background in imbalanced classification, statistical validation, and explainability (via the [transaction-fraud-risk-engine](https://github.com/husnainalix77/transaction-fraud-risk-engine) project) into deep learning and computer vision with this project.
+
 
 [![GitHub](https://img.shields.io/badge/GitHub-husnainalix77-181717?logo=github&logoColor=white)](https://github.com/husnainalix77)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-0A66C2?logo=linkedin&logoColor=white)](https://linkedin.com/)
